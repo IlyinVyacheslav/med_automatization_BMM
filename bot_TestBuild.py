@@ -8,8 +8,8 @@ from datetime import datetime, date
 DB_CONFIG = {
     "host": "127.0.0.1",
     "database": "clinic_bot_db",
-    "user": "ai_bot_registrar",  # Используем выделенную роль
-    "password": "ВАШ_ПАРОЛЬ_ОТ_ПОСТГРЕСА",  # Замените на актуальный пароль
+    "user": "ai_bot_registrar", # Используем выделенную роль
+    "password": "ВАШ_ПАРОЛЬ_ОТ_ПОСТГРЕСА", # Замените на актуальный пароль
     "port": "5432"
 }
 
@@ -91,15 +91,14 @@ BASE_SYSTEM_PROMPT = """
 - Шаблон ответа: «Информационный лист расписания ГБУЗ ЛО «ГАТЧИНСКАЯ КМБ» на [Дата]:
   [Для каждого найденного врача из списка сформируйте строку]:
   • [ФИО Врача] ([Специальность]) — Свободное время: [Слоты через запятую]
-
+  
   Чтобы записаться к кому-то из специалистов, просто сообщите мне его фамилию и желаемое время.»
 """
-
 
 def get_system_instructions():
     today_date = date.today().strftime('%Y-%m-%d')
     status_text = f"[USER STATUS]: АНОНИМЕН. Доступны только публичные консультации. Текущая дата: {today_date}."
-
+    
     if st.session_state.authorized:
         p = st.session_state.active_patient
         status_text = f"[USER STATUS]: АВТОРИЗОВАН. ID: {p['patient_id']}, ФИО: {p['last_name']} {p['first_name']}. Текущая дата: {today_date}."
@@ -116,39 +115,38 @@ def get_doctors_and_slots(specialty=None, doctor_name=None, target_date=None):
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         cur = conn.cursor()
-
+        
         if not target_date:
             target_date = date.today().strftime('%Y-%m-%d')
-
+            
         query = """
-                SELECT d.full_name, \
-                       s.name                                                            AS specialty,
-                       ARRAY_AGG(TO_CHAR(sl.starts_at, 'HH24:MI') ORDER BY sl.starts_at) AS free_slots
-                FROM clinic.doctors d
-                         JOIN clinic.doctor_specialties ds ON d.id = ds.doctor_id
-                         JOIN clinic.specialties s ON ds.specialty_id = s.id
-                         JOIN clinic.slots sl ON d.id = sl.doctor_id
-                WHERE d.is_active = TRUE
-                  AND sl.is_available = TRUE
-                  AND DATE (sl.starts_at) = %s \
-                """
+            SELECT d.full_name, s.name AS specialty, 
+                   ARRAY_AGG(TO_CHAR(sl.starts_at, 'HH24:MI') ORDER BY sl.starts_at) AS free_slots
+            FROM clinic.doctors d
+            JOIN clinic.doctor_specialties ds ON d.id = ds.doctor_id
+            JOIN clinic.specialties s ON ds.specialty_id = s.id
+            JOIN clinic.slots sl ON d.id = sl.doctor_id
+            WHERE d.is_active = TRUE 
+              AND sl.is_available = TRUE 
+              AND DATE(sl.starts_at) = %s
+        """
         params = [target_date]
-
+        
         if doctor_name:
             query += " AND d.full_name ILIKE %s"
             params.append(f"%{doctor_name.strip()}%")
         elif specialty:
             query += " AND LOWER(s.name) = LOWER(%s)"
             params.append(specialty.strip())
-
+            
         query += " GROUP BY d.id, d.full_name, s.name;"
-
+        
         cur.execute(query, tuple(params))
         rows = cur.fetchall()
-
+        
         if not rows:
             return {"status": "empty", "message": f"Свободных слотов или врачей на {target_date} не найдено."}
-
+            
         result = []
         for name, spec, slots in rows:
             result.append({
@@ -157,7 +155,7 @@ def get_doctors_and_slots(specialty=None, doctor_name=None, target_date=None):
                 "Дата": target_date,
                 "Свободные слоты": slots if slots else "Нет свободного времени"
             })
-
+            
         return result
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -171,23 +169,21 @@ def verify_patient(last_name, birth_date):
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         cur = conn.cursor()
-
+        
         cur.execute("""
-                    SELECT id, last_name, first_name
-                    FROM clinic.patients
-                    WHERE LOWER(last_name) = LOWER(%s)
-                      AND birth_date = %s;
-                    """, (last_name.strip(), birth_date.strip()))
-
+            SELECT id, last_name, first_name 
+            FROM clinic.patients 
+            WHERE LOWER(last_name) = LOWER(%s) AND birth_date = %s;
+        """, (last_name.strip(), birth_date.strip()))
+        
         row = cur.fetchone()
-
+        
         if row:
             st.session_state.authorized = True
             st.session_state.active_patient = {"patient_id": row[0], "last_name": row[1], "first_name": row[2]}
             return {"status": "found", "message": "Пациент найден и авторизован. Можете оформлять запись."}
         else:
-            return {"status": "not_found",
-                    "message": "Пациент не найден. Начните сценарий прикрепления (запросите Имя и Телефон)."}
+            return {"status": "not_found", "message": "Пациент не найден. Начните сценарий прикрепления (запросите Имя и Телефон)."}
     except Exception as e:
         return {"status": "error", "message": str(e)}
     finally:
@@ -200,18 +196,19 @@ def attach_new_patient(last_name, first_name, birth_date, phone_number):
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         cur = conn.cursor()
-
+        
         cur.execute("""
-                    INSERT INTO clinic.patients (last_name, first_name, birth_date, phone, created_by)
-                    VALUES (%s, %s, %s, %s, 'ai_bot_registrar') RETURNING id;
-                    """, (last_name, first_name, birth_date, phone_number))
-
+            INSERT INTO clinic.patients (last_name, first_name, birth_date, phone, created_by)
+            VALUES (%s, %s, %s, %s, 'ai_bot_registrar')
+            RETURNING id;
+        """, (last_name, first_name, birth_date, phone_number))
+        
         new_id = cur.fetchone()[0]
         conn.commit()
-
+        
         st.session_state.authorized = True
         st.session_state.active_patient = {"patient_id": new_id, "last_name": last_name, "first_name": first_name}
-
+        
         return {"status": "success", "message": f"Пациент {first_name} {last_name} успешно прикреплен и авторизован."}
     except Exception as e:
         if 'conn' in locals(): conn.rollback()
@@ -225,38 +222,37 @@ def book_appointment(doctor_name, target_date, time_slot):
     """ЗАПИСЬ ЧЕРЕЗ ФУНКЦИЮ: Оформление талона с использованием clinic.create_appointment."""
     if not st.session_state.authorized:
         return {"status": "error", "message": "ОШИБКА: Авторизация не пройдена!"}
-
+    
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         cur = conn.cursor()
-
+        
         # Находим ID слота и ID специальности
         cur.execute("""
-                    SELECT sl.id, s.id
-                    FROM clinic.slots sl
-                             JOIN clinic.doctors d ON sl.doctor_id = d.id
-                             JOIN clinic.doctor_specialties ds ON d.id = ds.doctor_id
-                             JOIN clinic.specialties s ON ds.specialty_id = s.id
-                    WHERE d.full_name ILIKE %s
-                      AND DATE (sl.starts_at) = %s
-                      AND TO_CHAR(sl.starts_at
-                        , 'HH24:MI') = %s
-                      AND sl.is_available = TRUE
-                        LIMIT 1;
-                    """, (f"%{doctor_name}%", target_date, time_slot))
-
+            SELECT sl.id, s.id
+            FROM clinic.slots sl
+            JOIN clinic.doctors d ON sl.doctor_id = d.id
+            JOIN clinic.doctor_specialties ds ON d.id = ds.doctor_id
+            JOIN clinic.specialties s ON ds.specialty_id = s.id
+            WHERE d.full_name ILIKE %s
+              AND DATE(sl.starts_at) = %s 
+              AND TO_CHAR(sl.starts_at, 'HH24:MI') = %s
+              AND sl.is_available = TRUE
+            LIMIT 1;
+        """, (f"%{doctor_name}%", target_date, time_slot))
+        
         slot_data = cur.fetchone()
         if not slot_data:
             return {"status": "error", "message": "Слот недоступен, уже занят или врач не найден."}
-
+            
         slot_id, specialty_id = slot_data
         patient_id = st.session_state.active_patient["patient_id"]
-
+        
         # Вызываем функцию БД для записи
         cur.execute("""
             SELECT clinic.create_appointment(%s, %s, %s, 'ai_bot_registrar');
         """, (patient_id, slot_id, specialty_id))
-
+        
         conn.commit()
         return {"status": "success", "message": f"Талон успешно оформлен на {target_date} в {time_slot}."}
     except Exception as e:
@@ -307,8 +303,7 @@ if user_input := st.chat_input("Ваш запрос..."):
                     "properties": {
                         "specialty": {"type": "string", "description": "Специальность врача (например, 'Терапевт')"},
                         "doctor_name": {"type": "string", "description": "ФИО или часть имени конкретного врача"},
-                        "target_date": {"type": "string",
-                                        "description": "Дата в формате YYYY-MM-DD. Если дата не указана, используйте текущую."}
+                        "target_date": {"type": "string", "description": "Дата в формате YYYY-MM-DD. Если дата не указана, используйте текущую."}
                     }
                 }
             }
@@ -380,11 +375,14 @@ if user_input := st.chat_input("Ваш запрос..."):
                 )
 
                 assistant_message = response['message']
-                func_name = None
                 auth_status_before_tool = st.session_state.authorized
 
                 # 2. Обработка вызова инструментов
                 if assistant_message.get('tool_calls'):
+                    
+                    # ИСПРАВЛЕНИЕ: Добавляем сообщение ассистента со списком вызванных функций один раз ДО цикла
+                    api_messages.append(assistant_message)
+                    
                     for tool in assistant_message['tool_calls']:
                         func_name = tool['function']['name']
                         args = tool['function']['arguments']
@@ -393,36 +391,34 @@ if user_input := st.chat_input("Ваш запрос..."):
 
                         # Запуск правильной функции на основе имени инструмента
                         if func_name == "get_doctors_and_slots":
-                            db_result = get_doctors_and_slots(args.get("specialty"), args.get("doctor_name"),
-                                                              args.get("target_date"))
+                            db_result = get_doctors_and_slots(args.get("specialty"), args.get("doctor_name"), args.get("target_date"))
                         elif func_name == "verify_patient":
                             db_result = verify_patient(args.get("last_name"), args.get("birth_date"))
                         elif func_name == "attach_new_patient":
-                            db_result = attach_new_patient(args.get("last_name"), args.get("first_name"),
-                                                           args.get("birth_date"), args.get("phone_number"))
+                            db_result = attach_new_patient(args.get("last_name"), args.get("first_name"), args.get("birth_date"), args.get("phone_number"))
                         elif func_name == "book_appointment":
-                            db_result = book_appointment(args.get("doctor_name"), args.get("target_date"),
-                                                         args.get("time_slot"))
+                            db_result = book_appointment(args.get("doctor_name"), args.get("target_date"), args.get("time_slot"))
                         else:
                             db_result = {"error": "Неизвестный инструмент"}
 
-                        # Передаем результат обратно
-                        api_messages.append(assistant_message)
+                        # Передаем результат конкретной функции обратно как "tool"
                         api_messages.append({
                             "role": "tool",
                             "content": json.dumps(db_result, ensure_ascii=False),
                             "name": func_name
                         })
 
-                        # Обновляем системный промпт (например, если прошла авторизация)
-                        api_messages[0] = {"role": "system", "content": get_system_instructions()}
+                    # Обновляем системный промпт (например, если после цикла функций прошла авторизация)
+                    api_messages[0] = {"role": "system", "content": get_system_instructions()}
 
-                        final_response = ollama.chat(
-                            model='qwen2.5:7b-instruct',
-                            messages=api_messages,
-                            options={"temperature": 0.1}
-                        )
-                        reply_content = final_response['message']['content']
+                    # ИСПРАВЛЕНИЕ: Запрос финального ответа вынесен за пределы цикла, 
+                    # чтобы не плодить запросы к Ollama на каждую вызванную функцию
+                    final_response = ollama.chat(
+                        model='qwen2.5:7b-instruct',
+                        messages=api_messages,
+                        options={"temperature": 0.1}
+                    )
+                    reply_content = final_response['message']['content']
                 else:
                     reply_content = assistant_message['content']
 
