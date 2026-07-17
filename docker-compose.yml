@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  # 1. База данных клиники
+  db:
+    image: postgres:15-alpine
+    container_name: clinic_postgres_db
+    restart: always
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      # Поштучно привязываем файлы через абсолютные пути, чтобы Docker на Windows гарантированно их увидел
+      - C:/Users/deado/PyCharmMiscProject/BMM_PROJECT/container/01_init.sql:/docker-entrypoint-initdb.d/01_init.sql
+      - C:/Users/deado/PyCharmMiscProject/BMM_PROJECT/container/02_mocks.sql:/docker-entrypoint-initdb.d/02_mocks.sql
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - clinic-net
+
+  # 2. ИИ-Регистратор (Интерфейс пациента)
+  patient-ui:
+    image: python:3.10-slim
+    container_name: clinic_patient_ui
+    restart: always
+    volumes:
+      - .:/app
+    working_dir: /app
+    command: sh -c "pip install streamlit psycopg2-binary ollama && streamlit run med_bd/patient_app.py --server.port 8501 --server.address 0.0.0.0"
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=db
+    networks:
+      - clinic-net
+    depends_on:
+      - db
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # 3. Кабинет врача (Интерфейс доктора)
+  doctor-ui:
+    image: python:3.10-slim
+    container_name: clinic_doctor_ui
+    restart: always
+    volumes:
+      - .:/app
+    working_dir: /app
+    command: sh -c "pip install streamlit psycopg2-binary pandas && streamlit run med_bd/doctor_app.py --server.port 8502 --server.address 0.0.0.0"
+    ports:
+      - "8502:8502"
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=db
+    networks:
+      - clinic-net
+    depends_on:
+      - db
+
+networks:
+  clinic-net:
+    driver: bridge
+
+volumes:
+  pgdata:
