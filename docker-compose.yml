@@ -1,9 +1,6 @@
-version: '3.8'
-
 services:
-  # 1. База данных клиники
   db:
-    image: postgres:15-alpine
+    image: postgres:16-alpine
     container_name: clinic_postgres_db
     restart: always
     env_file:
@@ -13,54 +10,81 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      # Поштучно привязываем файлы через абсолютные пути, чтобы Docker на Windows гарантированно их увидел
-      - C:/Users/deado/PyCharmMiscProject/BMM_PROJECT/container/01_init.sql:/docker-entrypoint-initdb.d/01_init.sql
-      - C:/Users/deado/PyCharmMiscProject/BMM_PROJECT/container/02_mocks.sql:/docker-entrypoint-initdb.d/02_mocks.sql
+      - ./database/init_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./database/init_data.sql:/docker-entrypoint-initdb.d/02_data.sql:ro
+      - ./database/init_roles.sh:/docker-entrypoint-initdb.d/03_roles.sh:ro
       - pgdata:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT}:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${DB_NAME}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     networks:
       - clinic-net
 
-  # 2. ИИ-Регистратор (Интерфейс пациента)
   patient-ui:
-    image: python:3.10-slim
+    build: .
     container_name: clinic_patient_ui
     restart: always
-    volumes:
-      - .:/app
-    working_dir: /app
-    command: sh -c "pip install streamlit psycopg2-binary ollama && streamlit run med_bd/patient_app.py --server.port 8501 --server.address 0.0.0.0"
+    command: streamlit run src/patient_app.py --server.port 8501 --server.address 0.0.0.0
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      OLLAMA_HOST: http://host.docker.internal:11434
     ports:
       - "8501:8501"
-    env_file:
-      - .env
-    environment:
-      - DB_HOST=db
-    networks:
-      - clinic-net
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    networks:
+      - clinic-net
 
-  # 3. Кабинет врача (Интерфейс доктора)
   doctor-ui:
-    image: python:3.10-slim
+    build: .
     container_name: clinic_doctor_ui
     restart: always
-    volumes:
-      - .:/app
-    working_dir: /app
-    command: sh -c "pip install streamlit psycopg2-binary pandas && streamlit run med_bd/doctor_app.py --server.port 8502 --server.address 0.0.0.0"
-    ports:
-      - "8502:8502"
+    command: streamlit run src/doctor_app.py --server.port 8502 --server.address 0.0.0.0
     env_file:
       - .env
     environment:
-      - DB_HOST=db
+      DB_HOST: db
+      DB_PORT: 5432
+    ports:
+      - "8502:8502"
+    depends_on:
+      db:
+        condition: service_healthy
     networks:
       - clinic-net
+
+  tests:
+    build: .
+    container_name: clinic_tests
+    profiles: [ "test" ]
+    command: python -m pytest tests -v
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      # проверяемая роль бота (из .env: DB_USER/DB_PASSWORD)
+      # админ для сидинга/очистки тестовых данных:
+      DB_ADMIN_USER: ${POSTGRES_USER}
+      DB_ADMIN_PASSWORD: ${POSTGRES_PASSWORD}
+      # роль регистратора для тестов пути врача:
+      REGISTRAR_USER: registrar
+      REGISTRAR_PASSWORD: ${REGISTRAR_PASSWORD}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    networks:
+      - clinic-net
 
 networks:
   clinic-net:
