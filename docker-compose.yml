@@ -62,8 +62,9 @@ services:
       curl -s -X POST http://ollama:11434/api/pull -H 'Content-Type: application/json' -d '{\"name\":\"qwen2.5:7b-instruct\",\"stream\":true}';
       echo 'Pulling bge-m3...';
       curl -s -X POST http://ollama:11434/api/pull -H 'Content-Type:application/json' -d '{\"name\":\"bge-m3\",\"stream\":true}';
-      echo 'Warming up model...';
+      echo 'Warming up models...';
       curl -s -X POST http://ollama:11434/api/generate -H 'Content-Type: application/json' -d '{\"model\":\"qwen2.5:7b-instruct\",\"prompt\":\"Hi\",\"keep_alive\":-1}';
+      curl -s -X POST http://ollama:11434/api/embed -H 'Content-Type: application/json' -d '{\"model\":\"bge-m3\",\"input\":\"Warmup\",\"keep_alive\":-1}';
       echo 'Ready!';
       "
     networks:
