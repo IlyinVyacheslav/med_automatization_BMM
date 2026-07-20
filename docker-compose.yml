@@ -104,8 +104,8 @@ services:
     ports:
       - "8501:8501"
     depends_on:
-      db:
-        condition: service_healthy
+      rag-init:
+        condition: service_completed_successfully
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:

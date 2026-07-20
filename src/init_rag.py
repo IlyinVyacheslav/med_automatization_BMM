@@ -2,14 +2,14 @@ import json
 import logging
 import os
 import re
-import ollama
-import psycopg2
 import requests
+import streamlit as st
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from pgvector.psycopg2 import register_vector
 from ollama import Client
+
+from repository import ClinicRepository, RepositoryError
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,23 +28,14 @@ rewrite_RAG = os.getenv("REWRITE_RAG", "false")
 
 ollama_client = Client(host='http://ollama:11434')
 
-# TODO config??
-DB_CONFIG = {
-    "host": os.getenv("DB_HOST", "127.0.0.1"),
-    "port": os.getenv("DB_PORT", "5432"),
-    "dbname": os.getenv("DB_NAME", "clinic"),
-    "user":  "postgres",
-    "password": "postgres",
-    "sslmode": os.getenv("DB_SSLMODE", "prefer"),
-    "client_encoding": os.getenv("DB_CLIENT_ENCODING", "UTF8"),
-    "options": f"-c timezone={os.getenv('DB_TIMEZONE', 'Europe/Moscow')}",
-}
 
-
-def get_db_connection():
-    conn = psycopg2.connect(**DB_CONFIG)
-    register_vector(conn)
-    return conn
+@st.cache_resource(show_spinner=False)
+def get_repo() -> ClinicRepository:
+    # роль суперпользователя
+    return ClinicRepository(
+        user=os.getenv("POSTGRES_USER"),
+        password=os.getenv("POSTGRES_PASSWORD"),
+    )
 
 
 def extract_clean_text(html_content: str, title: str) -> str:
@@ -72,19 +63,16 @@ def main():
         return
 
     try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-    except Exception as e:
-        logger.error(f"Не удалось подключиться к БД для построения RAG: {e}" )
-        return
-
-    cur.execute("SELECT COUNT(*) FROM clinic.medical_knowledge_base;")
-    if cur.fetchone()[0] > 0:
-        if rewrite_RAG != "true":
+        repo = get_repo()
+        if repo.get_medical_knowledge_base_size() > 0 and rewrite_RAG != "true":
             logger.info("База знаний уже заполнена. Пропуск инициализации.")
-            cur.close()
-            conn.close()
+            st.info("База знаний уже заполнена")
+            st.stop()
             return
+    except RepositoryError as e:
+        logger.error(f"Не удалось подключиться к БД для построения RAG: {e}")
+        st.error(f"Не удалось подключиться к базе данных: {e.message}")
+        st.stop()
 
     logger.info("База пуста, начинаю процесс заполнения...")
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1200, chunk_overlap=200)
@@ -104,23 +92,19 @@ def main():
 
             for chunk in sub_chunks:
                 embedding = get_embedding(chunk)
-                cur.execute("""
-                            INSERT INTO clinic.medical_knowledge_base
-                                (specialty, wiki_page_title, chunk_text, embedding)
-                            VALUES (%s, %s, %s, %s)
-                    """,
-                            (doctor, title, chunk, embedding)
-                            )
+                repo.add_specialty_to_medical_knowledge_base(
+                    doctor=doctor,
+                    title=title,
+                    chunk=chunk,
+                    embedding=embedding
+                )
 
-            conn.commit()
             logger.info(f"✅ Статья '{title}' успешно добавлена.")
 
         except Exception as e:
             logger.error(f"❌ Ошибка при обработке '{title}': {e}. Продолжаю работу.")
-            conn.rollback()
 
-    cur.close()
-    conn.close()
+    repo.close()
     logger.info("Процесс инициализации завершен.")
 
 

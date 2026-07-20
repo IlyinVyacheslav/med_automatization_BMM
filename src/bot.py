@@ -7,11 +7,9 @@ import os
 import json
 import datetime as dt
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Optional
 
 import ollama
-import psycopg2
-from pgvector.psycopg2 import register_vector
 
 from repository import ClinicRepository, RepositoryError
 import logging
@@ -21,17 +19,6 @@ logging.basicConfig(
     format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[logging.StreamHandler()]
 )
-
-DB_CONFIG = {
-    "host": os.getenv("DB_HOST", "127.0.0.1"),
-    "port": os.getenv("DB_PORT", "5432"),
-    "dbname": os.getenv("DB_NAME", "clinic"),
-    "user": "postgres",
-    "password": "postgres",
-    "sslmode": os.getenv("DB_SSLMODE", "prefer"),
-    "client_encoding": os.getenv("DB_CLIENT_ENCODING", "UTF8"),
-    "options": f"-c timezone={os.getenv('DB_TIMEZONE', 'Europe/Moscow')}",
-}
 
 
 # ---------------------------------------------------------------------------
@@ -608,18 +595,7 @@ class ClinicAssistant:
         emb_res = self.client.embed(model=self.vec_model, input=scientific_text)
         query_embedding = emb_res["embeddings"][0]
 
-        conn = psycopg2.connect(**DB_CONFIG)
-        cur = conn.cursor()
-        cur.execute("""
-                    SELECT specialty, wiki_page_title, chunk_text, (embedding <=> %s::vector) AS dist
-                    FROM clinic.medical_knowledge_base
-                    ORDER BY embedding <=> %s::vector LIMIT %s;
-                    """, (query_embedding, query_embedding, top_k))
-
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
-        # rows = self.repo.get_RAG_top_k(query_embedding, top_k) # не работает(((
+        rows = self.repo.get_RAG_top_k(query_embedding, top_k)
 
         logging.info(f"количество раг = {len(rows)}")
         logging.info(f"rag = {rows}")

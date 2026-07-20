@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 
 : "${DB_PASSWORD:?нужен DB_PASSWORD (пароль ai_bot_registrar)}"

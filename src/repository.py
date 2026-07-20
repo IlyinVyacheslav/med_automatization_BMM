@@ -5,11 +5,11 @@ import datetime as dt
 from contextlib import contextmanager
 from typing import Any, Optional
 
+from pgvector.psycopg2 import register_vector
 import psycopg2
 from psycopg2 import errorcodes
 from psycopg2.extras import RealDictCursor
 from psycopg2.pool import ThreadedConnectionPool
-from pgvector.psycopg2 import register_vector
 
 
 class RepositoryError(Exception):
@@ -66,6 +66,7 @@ class ClinicRepository:
     def _cursor(self, *, write: bool = False):
         conn = self._pool.getconn()
         try:
+            register_vector(conn)
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 yield cur
             conn.commit() if write else conn.rollback()
@@ -397,25 +398,44 @@ class ClinicRepository:
                 raise RepositoryError("Запись не найдена или уже отменена.", code="not_found")
             raise RepositoryError(f"Не удалось отменить запись: {e.pgerror or e}", code="db")
 
-    # TODO исправить, вроде как беды с пулом, см оригинал в боте
-    # def get_RAG_top_k(self, query_embedding, top_k):
-    #     conn = self._pool.getconn()
-    #     try:
-    #         register_vector(conn)  # для RAG
-    #
-    #         with conn.cursor() as cur:
-    #             cur.execute("""
-    #                         SELECT specialty, wiki_page_title, chunk_text, (embedding <=> %s::vector) AS dist
-    #                         FROM clinic.medical_knowledge_base
-    #                         ORDER BY embedding <=> %s::vector LIMIT %s;
-    #                         """, (query_embedding, query_embedding, top_k))
-    #             return cur.fetchall()
-    #     except Exception as e:
-    #         # TODO errors
-    #         print(f"ошибка бд {e}")
-    #         return []
-    #     finally:
-    #         self._pool.putconn(conn)
+    # ======================================================================
+    #  Работа с базой знаний
+    # ======================================================================
+
+    def get_medical_knowledge_base_size(self) -> int:
+        with self._cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM clinic.medical_knowledge_base;")
+            row = cur.fetchone()
+        return row["count"] if row else 0
+
+    def add_specialty_to_medical_knowledge_base(
+            self,
+            doctor: str,
+            title: str,
+            chunk: str,
+            embedding: list[float],
+    ) -> None:
+        with self._cursor(write=True) as cur:
+            cur.execute(
+                """INSERT INTO clinic.medical_knowledge_base
+                      (specialty, wiki_page_title, chunk_text, embedding)
+                   VALUES (%s, %s, %s, %s)""",
+                (doctor, title, chunk, embedding)
+            )
+
+    def get_RAG_top_k(self, query_embedding, top_k):
+        try:
+            with self._cursor() as cur:
+                cur.execute("""
+                            SELECT specialty, wiki_page_title, chunk_text, (embedding <=> %s::vector) AS dist
+                            FROM clinic.medical_knowledge_base
+                            ORDER BY embedding <=> %s::vector LIMIT %s;
+                            """, (query_embedding, query_embedding, top_k))
+                return cur.fetchall()
+        except Exception as e:
+            # TODO errors
+            print(f"ошибка бд {e}")
+            return []
 
     # ======================================================================
     #  Приватные помощники
