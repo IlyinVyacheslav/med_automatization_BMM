@@ -17,3 +17,5 @@ USING hnsw (embedding vector_cosine_ops);
 
 CREATE INDEX IF NOT EXISTS idx_medical_knowledge_specialty
 ON clinic.medical_knowledge_base (specialty);
+
+GRANT SELECT ON ALL TABLES IN SCHEMA clinic TO registrar, ai_bot_registrar;

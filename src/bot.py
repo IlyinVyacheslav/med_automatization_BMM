@@ -601,7 +601,12 @@ class ClinicAssistant:
         logging.info(f"rag = {rows}")
 
         chunks = []
-        for specialty, title, text, dist in rows:
+        for row in rows:
+            specialty = row.get("specialty")
+            title = row.get("wiki_page_title")
+            text = row.get("chunk_text")
+            dist = row.get("dist")
+
             similarity = 1 - dist
 
             if similarity >= bound:

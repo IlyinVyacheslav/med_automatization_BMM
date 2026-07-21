@@ -11,6 +11,13 @@ from psycopg2 import errorcodes
 from psycopg2.extras import RealDictCursor
 from psycopg2.pool import ThreadedConnectionPool
 
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[logging.StreamHandler()]
+)
 
 class RepositoryError(Exception):
     def __init__(self, message: str, *, code: str | None = None):
@@ -424,6 +431,7 @@ class ClinicRepository:
             )
 
     def get_RAG_top_k(self, query_embedding, top_k):
+        logging.info(f"get_RAG_top_k [INFO]: starts")
         try:
             with self._cursor() as cur:
                 cur.execute("""
@@ -431,10 +439,12 @@ class ClinicRepository:
                             FROM clinic.medical_knowledge_base
                             ORDER BY embedding <=> %s::vector LIMIT %s;
                             """, (query_embedding, query_embedding, top_k))
+                logging.info(f"get_RAG_top_k [INFO]: GOOD")
                 return cur.fetchall()
         except Exception as e:
             # TODO errors
-            print(f"ошибка бд {e}")
+            # print(f"ошибка бд {e}")
+            logging.info(f"get_RAG_top_k [ERROR]: {e}")
             return []
 
     # ======================================================================
