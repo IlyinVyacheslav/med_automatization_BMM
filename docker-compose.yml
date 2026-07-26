@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: clinic_postgres_db
     restart: always
     env_file:
@@ -13,6 +13,7 @@ services:
       - ./database/init_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
       - ./database/init_data.sql:/docker-entrypoint-initdb.d/02_data.sql:ro
       - ./database/init_roles.sh:/docker-entrypoint-initdb.d/03_roles.sh:ro
+      - ./database/init_rag.sql:/docker-entrypoint-initdb.d/04_rag.sql:ro
       - pgdata:/var/lib/postgresql/data
     ports:
       - "${DB_PORT}:5432"
@@ -21,6 +22,71 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    networks:
+      - clinic-net
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: med_ollama
+    restart: always
+    ports:
+      - "11434:11434"
+    environment:
+      - OLLAMA_HOST=0.0.0.0 # Заставляем Ollama слушать внешние подключения
+      - OLLAMA_KEEP_ALIVE=-1
+      #- OLLAMA_NUM_PARALLEL=4  # <--- Добавьте это (например, до 4 параллельных запросов)
+      #- CUDA_VISIBLE_DEVICES=0
+    volumes:
+      - ollama_data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+    networks:
+      - clinic-net
+
+  ollama-pull-model:
+    image: curlimages/curl:latest
+    container_name: med_ollama_puller
+    depends_on:
+      - ollama
+    entrypoint: >
+      /bin/sh -c "
+      set -e;
+      echo 'Waiting for Ollama...';
+      until curl -s -f http://ollama:11434/api/tags > /dev/null; do sleep 2; done;
+      echo 'Pulling qwen2.5:7b-instruct...';
+      curl -s -X POST http://ollama:11434/api/pull -H 'Content-Type: application/json' -d '{\"name\":\"qwen2.5:7b-instruct\",\"stream\":true}';
+      echo 'Pulling bge-m3...';
+      curl -s -X POST http://ollama:11434/api/pull -H 'Content-Type:application/json' -d '{\"name\":\"bge-m3\",\"stream\":true}';
+      echo 'Warming up models...';
+      curl -s -X POST http://ollama:11434/api/generate -H 'Content-Type: application/json' -d '{\"model\":\"qwen2.5:7b-instruct\",\"prompt\":\"Hi\",\"keep_alive\":-1}';
+      curl -s -X POST http://ollama:11434/api/embed -H 'Content-Type: application/json' -d '{\"model\":\"bge-m3\",\"input\":\"Warmup\",\"keep_alive\":-1}';
+      echo 'Ready!';
+      "
+    networks:
+      - clinic-net
+
+  rag-init:
+    build: .
+    container_name: clinic_rag_init
+    restart: "no"
+    command: python src/init_rag.py
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      # Укажите путь к JSON, если он отличается от корня
+      RAG_JSON_PATH: "/app/resources/RAG_data/config_data.json"
+    depends_on:
+      db:
+        condition: service_healthy
+      ollama-pull-model:
+        condition: service_completed_successfully
     networks:
       - clinic-net
 
@@ -34,12 +100,12 @@ services:
     environment:
       DB_HOST: db
       DB_PORT: 5432
-      OLLAMA_HOST: http://host.docker.internal:11434
+      OLLAMA_HOST: http://ollama:11434
     ports:
       - "8501:8501"
     depends_on:
-      db:
-        condition: service_healthy
+      rag-init:
+        condition: service_started
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -92,3 +158,4 @@ networks:
 
 volumes:
   pgdata:
+  ollama_data:

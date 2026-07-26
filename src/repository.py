@@ -5,11 +5,19 @@ import datetime as dt
 from contextlib import contextmanager
 from typing import Any, Optional
 
+from pgvector.psycopg2 import register_vector
 import psycopg2
 from psycopg2 import errorcodes
 from psycopg2.extras import RealDictCursor
 from psycopg2.pool import ThreadedConnectionPool
 
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[logging.StreamHandler()]
+)
 
 class RepositoryError(Exception):
     def __init__(self, message: str, *, code: str | None = None):
@@ -35,11 +43,11 @@ class ClinicRepository:
     """Пул соединений + методы доступа. Один экземпляр на процесс/роль."""
 
     def __init__(
-        self,
-        minconn: int = 1,
-        maxconn: int = 5,
-        user: Optional[str] = None,
-        password: Optional[str] = None,
+            self,
+            minconn: int = 1,
+            maxconn: int = 5,
+            user: Optional[str] = None,
+            password: Optional[str] = None,
     ):
         try:
             self._pool = ThreadedConnectionPool(minconn, maxconn, **_db_config(user, password))
@@ -65,6 +73,7 @@ class ClinicRepository:
     def _cursor(self, *, write: bool = False):
         conn = self._pool.getconn()
         try:
+            register_vector(conn)
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 yield cur
             conn.commit() if write else conn.rollback()
@@ -95,13 +104,15 @@ class ClinicRepository:
             return [dict(r) for r in cur.fetchall()]
 
     def search_doctors(self, name: Optional[str] = None, specialty: Optional[str] = None) -> list[dict]:
-        sql = """
-            SELECT d.id, d.full_name, d.is_active,
-                   ARRAY_AGG(s.name ORDER BY s.name) AS specialties
-              FROM clinic.doctors d
-              JOIN clinic.doctor_specialties ds ON ds.doctor_id = d.id
-              JOIN clinic.specialties s         ON s.id = ds.specialty_id
-             WHERE d.is_active = TRUE
+        sql = """ \
+              SELECT d.id, \
+                     d.full_name, \
+                     d.is_active, \
+                     ARRAY_AGG(s.name ORDER BY s.name) AS specialties
+              FROM clinic.doctors d \
+                       JOIN clinic.doctor_specialties ds ON ds.doctor_id = d.id \
+                       JOIN clinic.specialties s ON s.id = ds.specialty_id \
+              WHERE d.is_active = TRUE
         """
         params: list[Any] = []
         if name:
@@ -116,26 +127,32 @@ class ClinicRepository:
             return [dict(r) for r in cur.fetchall()]
 
     def get_available_slots(
-        self,
-        specialty: Optional[str] = None,
-        doctor_name: Optional[str] = None,
-        date: Optional[str] = None,
-        limit: int = 50,
+            self,
+            specialty: Optional[str] = None,
+            doctor_name: Optional[str] = None,
+            date: Optional[str] = None,
+            limit: int = 50,
     ) -> list[dict]:
         """Свободные слоты: открыт (is_available) И без активной записи."""
         target_date = self._parse_date(date) if date else None
-        sql = """
-            SELECT sl.id AS slot_id, d.full_name AS doctor,
-                   s.name AS specialty, s.code AS specialty_code,
-                   sl.starts_at, sl.ends_at
-              FROM clinic.slots sl
-              JOIN clinic.doctors d             ON d.id = sl.doctor_id
-              JOIN clinic.doctor_specialties ds ON ds.doctor_id = d.id
-              JOIN clinic.specialties s         ON s.id = ds.specialty_id
-             WHERE d.is_active = TRUE AND sl.is_available = TRUE
-               AND sl.starts_at >= now()
-               AND NOT EXISTS (SELECT 1 FROM clinic.appointments a
-                                WHERE a.slot_id = sl.id AND a.status <> 'cancelled')
+        sql = """ \
+              SELECT sl.id       AS slot_id, \
+                     d.full_name AS doctor, \
+                     s.name      AS specialty, \
+                     s.code      AS specialty_code, \
+                     sl.starts_at, \
+                     sl.ends_at
+              FROM clinic.slots sl \
+                       JOIN clinic.doctors d ON d.id = sl.doctor_id \
+                       JOIN clinic.doctor_specialties ds ON ds.doctor_id = d.id \
+                       JOIN clinic.specialties s ON s.id = ds.specialty_id \
+              WHERE d.is_active = TRUE \
+                AND sl.is_available = TRUE \
+                AND sl.starts_at >= now() \
+                AND NOT EXISTS (SELECT 1 \
+                                FROM clinic.appointments a
+                                WHERE a.slot_id = sl.id \
+                                  AND a.status <> 'cancelled')
         """
         params: list[Any] = []
         if target_date is not None:
@@ -154,10 +171,10 @@ class ClinicRepository:
             return [dict(r) for r in cur.fetchall()]
 
     def get_doctors_and_slots(
-        self,
-        specialty: Optional[str] = None,
-        doctor_name: Optional[str] = None,
-        target_date: Optional[str] = None,
+            self,
+            specialty: Optional[str] = None,
+            doctor_name: Optional[str] = None,
+            target_date: Optional[str] = None,
     ) -> list[dict]:
         """
         Свободные слоты, сгруппированные по врачу (для речевых шаблонов бота).
@@ -182,9 +199,10 @@ class ClinicRepository:
             cur.execute(
                 """
                 SELECT id, last_name, first_name, middle_name, birth_date, phone
-                  FROM clinic.patients
-                 WHERE lower(last_name) = lower(%s) AND birth_date = %s
-                 ORDER BY id LIMIT 1;
+                FROM clinic.patients
+                WHERE lower(last_name) = lower(%s)
+                  AND birth_date = %s
+                ORDER BY id LIMIT 1;
                 """,
                 (last_name.strip(), bd),
             )
@@ -205,14 +223,18 @@ class ClinicRepository:
         with self._cursor() as cur:
             cur.execute(
                 """
-                SELECT a.id AS appointment_id, d.full_name AS doctor, s.name AS specialty,
-                       sl.starts_at, a.status
-                  FROM clinic.appointments a
-                  JOIN clinic.slots sl      ON sl.id = a.slot_id
-                  JOIN clinic.doctors d     ON d.id = sl.doctor_id
-                  JOIN clinic.specialties s ON s.id = a.specialty_id
-                 WHERE a.patient_id = %s AND a.status <> 'cancelled'
-                 ORDER BY sl.starts_at;
+                SELECT a.id        AS appointment_id,
+                       d.full_name AS doctor,
+                       s.name      AS specialty,
+                       sl.starts_at,
+                       a.status
+                FROM clinic.appointments a
+                         JOIN clinic.slots sl ON sl.id = a.slot_id
+                         JOIN clinic.doctors d ON d.id = sl.doctor_id
+                         JOIN clinic.specialties s ON s.id = a.specialty_id
+                WHERE a.patient_id = %s
+                  AND a.status <> 'cancelled'
+                ORDER BY sl.starts_at;
                 """,
                 (int(patient_id),),
             )
@@ -220,15 +242,18 @@ class ClinicRepository:
 
     def get_doctor_schedule(self, doctor_id: int, include_cancelled: bool = True) -> list[dict]:
         """Записи к врачу (для панели врача/регистратора)."""
-        sql = """
-            SELECT a.id AS appointment_id, sl.starts_at,
-                   p.last_name || ' ' || p.first_name AS patient,
-                   p.phone, a.status, s.name AS specialty
-              FROM clinic.appointments a
-              JOIN clinic.slots sl      ON sl.id = a.slot_id
-              JOIN clinic.patients p    ON p.id = a.patient_id
-              JOIN clinic.specialties s ON s.id = a.specialty_id
-             WHERE sl.doctor_id = %s
+        sql = """ \
+              SELECT a.id                               AS appointment_id, \
+                     sl.starts_at, \
+                     p.last_name || ' ' || p.first_name AS patient, \
+                     p.phone, \
+                     a.status, \
+                     s.name                             AS specialty
+              FROM clinic.appointments a \
+                       JOIN clinic.slots sl ON sl.id = a.slot_id \
+                       JOIN clinic.patients p ON p.id = a.patient_id \
+                       JOIN clinic.specialties s ON s.id = a.specialty_id \
+              WHERE sl.doctor_id = %s
         """
         if not include_cancelled:
             sql += " AND a.status <> 'cancelled'"
@@ -241,12 +266,12 @@ class ClinicRepository:
     #  Запись пациента (регистрация)
     # ======================================================================
     def register_patient(
-        self,
-        last_name: str,
-        first_name: str,
-        birth_date: str,
-        phone: Optional[str] = None,
-        middle_name: Optional[str] = None,
+            self,
+            last_name: str,
+            first_name: str,
+            birth_date: str,
+            phone: Optional[str] = None,
+            middle_name: Optional[str] = None,
     ) -> dict:
         bd = self._parse_date(birth_date)
         try:
@@ -254,8 +279,7 @@ class ClinicRepository:
                 cur.execute(
                     """
                     INSERT INTO clinic.patients (last_name, first_name, middle_name, birth_date, phone)
-                    VALUES (%s, %s, %s, %s, %s)
-                    RETURNING id, last_name, first_name, middle_name, birth_date, phone;
+                    VALUES (%s, %s, %s, %s, %s) RETURNING id, last_name, first_name, middle_name, birth_date, phone;
                     """,
                     (last_name.strip(), first_name.strip(),
                      (middle_name.strip() if middle_name else None), bd,
@@ -318,15 +342,17 @@ class ClinicRepository:
             cur.execute(
                 """
                 SELECT sl.id AS slot_id
-                  FROM clinic.slots sl
-                  JOIN clinic.doctors d ON d.id = sl.doctor_id
-                 WHERE d.full_name ILIKE %s
-                   AND sl.starts_at::date = %s
-                   AND to_char(sl.starts_at, 'HH24:MI') = %s
-                   AND sl.is_available
-                   AND NOT EXISTS (SELECT 1 FROM clinic.appointments a
-                                    WHERE a.slot_id = sl.id AND a.status <> 'cancelled')
-                 ORDER BY sl.starts_at LIMIT 1;
+                FROM clinic.slots sl
+                         JOIN clinic.doctors d ON d.id = sl.doctor_id
+                WHERE d.full_name ILIKE %s
+                  AND sl.starts_at:: date = %s
+                  AND to_char(sl.starts_at
+                    , 'HH24:MI') = %s
+                  AND sl.is_available
+                  AND NOT EXISTS (SELECT 1 FROM clinic.appointments a
+                    WHERE a.slot_id = sl.id
+                  AND a.status <> 'cancelled')
+                ORDER BY sl.starts_at LIMIT 1;
                 """,
                 (f"%{doctor_name.strip()}%", target_date, time_slot.strip()),
             )
@@ -380,6 +406,48 @@ class ClinicRepository:
             raise RepositoryError(f"Не удалось отменить запись: {e.pgerror or e}", code="db")
 
     # ======================================================================
+    #  Работа с базой знаний
+    # ======================================================================
+
+    def get_medical_knowledge_base_size(self) -> int:
+        with self._cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM clinic.medical_knowledge_base;")
+            row = cur.fetchone()
+        return row["count"] if row else 0
+
+    def add_specialty_to_medical_knowledge_base(
+            self,
+            doctor: str,
+            title: str,
+            chunk: str,
+            embedding: list[float],
+    ) -> None:
+        with self._cursor(write=True) as cur:
+            cur.execute(
+                """INSERT INTO clinic.medical_knowledge_base
+                      (specialty, wiki_page_title, chunk_text, embedding)
+                   VALUES (%s, %s, %s, %s)""",
+                (doctor, title, chunk, embedding)
+            )
+
+    def get_RAG_top_k(self, query_embedding, top_k):
+        logging.info(f"get_RAG_top_k [INFO]: starts")
+        try:
+            with self._cursor() as cur:
+                cur.execute("""
+                            SELECT specialty, wiki_page_title, chunk_text, (embedding <=> %s::vector) AS dist
+                            FROM clinic.medical_knowledge_base
+                            ORDER BY embedding <=> %s::vector LIMIT %s;
+                            """, (query_embedding, query_embedding, top_k))
+                logging.info(f"get_RAG_top_k [INFO]: GOOD")
+                return cur.fetchall()
+        except Exception as e:
+            # TODO errors
+            # print(f"ошибка бд {e}")
+            logging.info(f"get_RAG_top_k [ERROR]: {e}")
+            return []
+
+    # ======================================================================
     #  Приватные помощники
     # ======================================================================
     def _enrich(self, cur, slot_id: int, specialty_id: int) -> dict:
@@ -387,10 +455,10 @@ class ClinicRepository:
         cur.execute(
             """
             SELECT d.full_name AS doctor, s.name AS specialty, sl.starts_at
-              FROM clinic.slots sl
-              JOIN clinic.doctors d     ON d.id = sl.doctor_id
-              JOIN clinic.specialties s ON s.id = %s
-             WHERE sl.id = %s;
+            FROM clinic.slots sl
+                     JOIN clinic.doctors d ON d.id = sl.doctor_id
+                     JOIN clinic.specialties s ON s.id = %s
+            WHERE sl.id = %s;
             """,
             (specialty_id, slot_id),
         )

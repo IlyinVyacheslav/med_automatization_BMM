@@ -1,0 +1,239 @@
+{
+  "wiki_dataset": [
+    {
+      "title": "Грипп",
+      "url": "https://ru.wikipedia.org/wiki/Грипп",
+      "doctor": "Терапевт"
+    },
+    {
+      "title": "Острая респираторная вирусная инфекция",
+      "url": "https://ru.wikipedia.org/wiki/Острая_респираторная_вирусная_инфекция",
+      "doctor": "Терапевт"
+    },
+    {
+      "title": "COVID-19",
+      "url": "https://ru.wikipedia.org/wiki/COVID-19",
+      "doctor": "Терапевт"
+    },
+    {
+      "title": "Ангина",
+      "url": "https://ru.wikipedia.org/wiki/Ангина",
+      "doctor": "Оториноларинголог (ЛОР)"
+    },
+    {
+      "title": "Фарингит",
+      "url": "https://ru.wikipedia.org/wiki/Фарингит",
+      "doctor": "Оториноларинголог (ЛОР)"
+    },
+    {
+      "title": "Ларингит",
+      "url": "https://ru.wikipedia.org/wiki/Ларингит",
+      "doctor": "Оториноларинголог (ЛОР)"
+    },
+    {
+      "title": "Синусит",
+      "url": "https://ru.wikipedia.org/wiki/Синусит",
+      "doctor": "Оториноларинголог (ЛОР)"
+    },
+    {
+      "title": "Отит",
+      "url": "https://ru.wikipedia.org/wiki/Отит",
+      "doctor": "Оториноларинголог (ЛОР)"
+    },
+    {
+      "title": "Бронхит",
+      "url": "https://ru.wikipedia.org/wiki/Бронхит",
+      "doctor": "Терапевт (при осложнениях Пульмонолог)"
+    },
+    {
+      "title": "Пневмония",
+      "url": "https://ru.wikipedia.org/wiki/Пневмония",
+      "doctor": "Терапевт (при тяжелом течении Пульмонолог)"
+    },
+    {
+      "title": "Бронхиальная астма",
+      "url": "https://ru.wikipedia.org/wiki/Бронхиальная_астма",
+      "doctor": "Пульмонолог / Аллерголог"
+    },
+    {
+      "title": "Туберкулёз",
+      "url": "https://ru.wikipedia.org/wiki/Туберкулёз",
+      "doctor": "Фтизиатр"
+    },
+    {
+      "title": "Аллергический ринит",
+      "url": "https://ru.wikipedia.org/wiki/Аллергический_ринит",
+      "doctor": "Аллерголог"
+    },
+    {
+      "title": "Конъюнктивит",
+      "url": "https://ru.wikipedia.org/wiki/Конъюнктивит",
+      "doctor": "Офтальмолог (Окулист)"
+    },
+    {
+      "title": "Гастрит",
+      "url": "https://ru.wikipedia.org/wiki/Гастрит",
+      "doctor": "Гастроэнтеролог"
+    },
+    {
+      "title": "Язвенная болезнь желудка",
+      "url": "https://ru.wikipedia.org/wiki/Язвенная_болезнь_желудка",
+      "doctor": "Гастроэнтеролог"
+    },
+    {
+      "title": "Гастроэнтерит",
+      "url": "https://ru.wikipedia.org/wiki/Гастроэнтерит",
+      "doctor": "Гастроэнтеролог (при острой инфекции Инфекционист)"
+    },
+    {
+      "title": "Панкреатит",
+      "url": "https://ru.wikipedia.org/wiki/Панкреатит",
+      "doctor": "Гастроэнтеролог"
+    },
+    {
+      "title": "Холецистит",
+      "url": "https://ru.wikipedia.org/wiki/Холецистит",
+      "doctor": "Гастроэнтеролог"
+    },
+    {
+      "title": "Желчнокаменная болезнь",
+      "url": "https://ru.wikipedia.org/wiki/Желчнокаменная_болезнь",
+      "doctor": "Гастроэнтеролог / Хирург"
+    },
+    {
+      "title": "Аппендицит",
+      "url": "https://ru.wikipedia.org/wiki/Аппендицит",
+      "doctor": "Хирург (Срочно!)"
+    },
+    {
+      "title": "Синдром раздражённого кишечника",
+      "url": "https://ru.wikipedia.org/wiki/Синдром_раздражённого_кишечника",
+      "doctor": "Гастроэнтеролог"
+    },
+    {
+      "title": "Запор",
+      "url": "https://ru.wikipedia.org/wiki/Запор_(медицина)",
+      "doctor": "Гастроэнтеролог / Терапевт"
+    },
+    {
+      "title": "Диарея",
+      "url": "https://ru.wikipedia.org/wiki/Диарея",
+      "doctor": "Гастроэнтеролог / Терапевт"
+    },
+    {
+      "title": "Артериальная гипертензия",
+      "url": "https://ru.wikipedia.org/wiki/Артериальная_гипертензия",
+      "doctor": "Кардиолог / Терапевт"
+    },
+    {
+      "title": "Ишемическая болезнь сердца",
+      "url": "https://ru.wikipedia.org/wiki/Ишемическая_болезнь_сердца",
+      "doctor": "Кардиолог"
+    },
+    {
+      "title": "Инфаркт миокарда",
+      "url": "https://ru.wikipedia.org/wiki/Инфаркт_миокарда",
+      "doctor": "Кардиолог (Срочно! Вызов скорой)"
+    },
+    {
+      "title": "Инсульт",
+      "url": "https://ru.wikipedia.org/wiki/Инсульт",
+      "doctor": "Невролог (Срочно! Вызов скорой)"
+    },
+    {
+      "title": "Атеросклероз",
+      "url": "https://ru.wikipedia.org/wiki/Атеросклероз",
+      "doctor": "Кардиолог / Ангиохирург"
+    },
+    {
+      "title": "Варикозное расширение вен",
+      "url": "https://ru.wikipedia.org/wiki/Варикозное_расширение_вен",
+      "doctor": "Флеболог / Сосудистый хирург"
+    },
+    {
+      "title": "Сахарный диабет",
+      "url": "https://ru.wikipedia.org/wiki/Сахарный_диабет",
+      "doctor": "Эндокринолог"
+    },
+    {
+      "title": "Гипотиреоз",
+      "url": "https://ru.wikipedia.org/wiki/Гипотиреоз",
+      "doctor": "Эндокринолог"
+    },
+    {
+      "title": "Гипертиреоз",
+      "url": "https://ru.wikipedia.org/wiki/Гипертиреоз",
+      "doctor": "Эндокринолог"
+    },
+    {
+      "title": "Мигрень",
+      "url": "https://ru.wikipedia.org/wiki/Мигрень",
+      "doctor": "Невролог"
+    },
+    {
+      "title": "Эпилепсия",
+      "url": "https://ru.wikipedia.org/wiki/Эпилепсия",
+      "doctor": "Невролог"
+    },
+    {
+      "title": "Болезнь Паркинсона",
+      "url": "https://ru.wikipedia.org/wiki/Болезнь_Паркинсона",
+      "doctor": "Невролог"
+    },
+    {
+      "title": "Болезнь Альцгеймера",
+      "url": "https://ru.wikipedia.org/wiki/Болезнь_Альцгеймера",
+      "doctor": "Неролог / Психиатр"
+    },
+    {
+      "title": "Цистит",
+      "url": "https://ru.wikipedia.org/wiki/Цистит",
+      "doctor": "Уролог (женщинам также можно к Гинекологу)"
+    },
+    {
+      "title": "Пиелонефрит",
+      "url": "https://ru.wikipedia.org/wiki/Пиелонефрит",
+      "doctor": "Уролог / Нефролог"
+    },
+    {
+      "title": "Мочекаменная болезнь",
+      "url": "https://ru.wikipedia.org/wiki/Мочекаменная_болезнь",
+      "doctor": "Уролог"
+    },
+    {
+      "title": "Остеоартроз",
+      "url": "https://ru.wikipedia.org/wiki/Остеоартроз",
+      "doctor": "Ревматолог / Ортопед"
+    },
+    {
+      "title": "Ревматоидный артрит",
+      "url": "https://ru.wikipedia.org/wiki/Ревматоидный_артрит",
+      "doctor": "Ревматолог"
+    },
+    {
+      "title": "Подагра",
+      "url": "https://ru.wikipedia.org/wiki/Подагра",
+      "doctor": "Ревматолог / Эндокринолог"
+    },
+    {
+      "title": "Дерматит",
+      "url": "https://ru.wikipedia.org/wiki/Дерматит",
+      "doctor": "Дерматолог"
+    },
+    {
+      "title": "Экзема",
+      "url": "https://ru.wikipedia.org/wiki/Экзема",
+      "doctor": "Дерматолог"
+    },
+    {
+      "title": "Псориаз",
+      "url": "https://ru.wikipedia.org/wiki/Псориаз",
+      "doctor": "Дерматолог"
+    },
+    {
+      "title": "Акне",
+      "url": "https://ru.wikipedia.org/wiki/Акне",
+      "doctor": "Дерматолог / Дерматокосметолог"
+    }
+  ]
+}
